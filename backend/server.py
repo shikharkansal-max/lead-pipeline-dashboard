@@ -88,6 +88,24 @@ class TrendData(BaseModel):
     deals: int
     value: float
 
+class MQLSQLMetrics(BaseModel):
+    region: str
+    date_columns: List[str]
+    channels: Dict[str, List[int]]
+    totals: List[int]
+    weekly_target: Optional[int] = None
+    monthly_target: Optional[int] = None
+
+class LeadFunnelMetrics(BaseModel):
+    mql_india: int
+    sql_india: int
+    deals_india: int
+    mql_us: int
+    sql_us: int
+    deals_us: int
+    conversion_mql_to_sql: float
+    conversion_sql_to_deal: float
+
 # Google Sheets Configuration - Using CSV export from publicly shared sheet
 SPREADSHEET_ID = "1sCF9c4A0rartzBdJMo8bYQbKkAyHqcJsIZOlANDcbn4"
 SHEET_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv"
