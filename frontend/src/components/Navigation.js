@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, GitMerge, FileText } from "lucide-react";
+import { BarChart3, GitMerge, TrendingUp } from "lucide-react";
 
 const Navigation = () => {
   const location = useLocation();
@@ -16,6 +16,12 @@ const Navigation = () => {
       label: "MQL/SQL Analytics",
       icon: GitMerge,
       description: "Lead generation metrics"
+    },
+    {
+      path: "/trends",
+      label: "AI Trends",
+      icon: TrendingUp,
+      description: "Industry insights"
     }
   ];
 
@@ -39,7 +45,7 @@ const Navigation = () => {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }
                 `}
-                data-testid={`nav-${item.path === '/' ? 'pipeline' : 'mql-sql'}`}
+                data-testid={`nav-${item.path.substring(1) || 'pipeline'}`}
               >
                 <Icon className={`mr-2 h-5 w-5 ${
                   isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
