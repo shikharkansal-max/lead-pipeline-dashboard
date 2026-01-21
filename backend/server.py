@@ -88,42 +88,31 @@ class TrendData(BaseModel):
     deals: int
     value: float
 
-# Google Sheets Configuration
-SPREADSHEET_ID = "1SbFZVPDQ7JUS_zEdfVvxnwpZzA4yQL6xLKs4-eot0WY"
-RANGE_NAME = "Sheet1!A:Z"  # Adjust based on actual sheet structure
-
-def get_sheets_service():
-    """Get Google Sheets service - using public access for now"""
-    try:
-        # For public sheets, we can use API key or no authentication
-        # If sheet is private, user needs to provide OAuth or Service Account
-        from googleapiclient.discovery import build
-        service = build('sheets', 'v4', developerKey=None, cache_discovery=False)
-        return service
-    except Exception as e:
-        logger.error(f"Failed to create sheets service: {e}")
-        return None
+# Google Sheets Configuration - Using published CSV export
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSU5Lw5xSo7CeFywFp_4b6q9W_8nMsgacg-VXNSypaETykorT2WLZ6HoSIxnTs6nSk7AfTGJ8Uz7trV/pub?output=csv"
 
 async def fetch_sheet_data():
-    """Fetch data from Google Sheets"""
+    """Fetch data from Google Sheets published CSV"""
+    import aiohttp
+    import csv
+    import io
+    
     try:
-        # Run in thread to avoid blocking
-        loop = asyncio.get_event_loop()
-        service = await loop.run_in_executor(None, get_sheets_service)
-        
-        if not service:
-            return None
-            
-        result = await loop.run_in_executor(
-            None,
-            lambda: service.spreadsheets().values().get(
-                spreadsheetId=SPREADSHEET_ID,
-                range=RANGE_NAME
-            ).execute()
-        )
-        
-        values = result.get('values', [])
-        return values
+        async with aiohttp.ClientSession() as session:
+            async with session.get(SHEET_CSV_URL, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to fetch sheet: HTTP {response.status}")
+                    return None
+                
+                content = await response.text()
+                
+                # Parse CSV
+                csv_reader = csv.reader(io.StringIO(content))
+                values = list(csv_reader)
+                
+                logger.info(f"Fetched {len(values)} rows from sheet")
+                return values
+                
     except Exception as e:
         logger.error(f"Error fetching sheet data: {e}")
         return None
