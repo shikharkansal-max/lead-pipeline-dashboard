@@ -10,8 +10,6 @@ import PipelineView from "../components/PipelineView";
 import AEPerformance from "../components/AEPerformance";
 import RegionalBreakdown from "../components/RegionalBreakdown";
 import DealTable from "../components/DealTable";
-import LeadFunnel from "../components/LeadFunnel";
-import MQLSQLTable from "../components/MQLSQLTable";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
