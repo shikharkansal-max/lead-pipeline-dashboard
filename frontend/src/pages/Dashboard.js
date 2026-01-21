@@ -380,20 +380,6 @@ const Dashboard = () => {
           <PipelineView stages={pipelineMetrics?.stages || {}} />
         </div>
 
-        {/* Lead Funnel */}
-        {leadFunnelData && (
-          <div className="mb-8">
-            <LeadFunnel data={leadFunnelData} />
-          </div>
-        )}
-
-        {/* MQL/SQL Breakdown Table */}
-        {mqlSqlData && (
-          <div className="mb-8">
-            <MQLSQLTable data={mqlSqlData} />
-          </div>
-        )}
-
         {/* Performance Metrics */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           <AEPerformance data={aePerformance} />
