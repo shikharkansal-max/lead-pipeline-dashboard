@@ -88,8 +88,9 @@ class TrendData(BaseModel):
     deals: int
     value: float
 
-# Google Sheets Configuration - Using published CSV export
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSU5Lw5xSo7CeFywFp_4b6q9W_8nMsgacg-VXNSypaETykorT2WLZ6HoSIxnTs6nSk7AfTGJ8Uz7trV/pub?output=csv"
+# Google Sheets Configuration - Using CSV export from publicly shared sheet
+SPREADSHEET_ID = "1sCF9c4A0rartzBdJMo8bYQbKkAyHqcJsIZOlANDcbn4"
+SHEET_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid=608527908"
 
 async def fetch_sheet_data():
     """Fetch data from Google Sheets published CSV"""
