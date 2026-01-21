@@ -124,24 +124,6 @@ const Dashboard = () => {
     }
   };
 
-  const fetchLeadFunnel = async () => {
-    try {
-      const response = await axios.get(`${API}/analytics/lead-funnel`);
-      setLeadFunnelData(response.data);
-    } catch (error) {
-      console.error("Error fetching lead funnel:", error);
-    }
-  };
-
-  const fetchMQLSQL = async () => {
-    try {
-      const response = await axios.get(`${API}/analytics/mql-sql`);
-      setMqlSqlData(response.data);
-    } catch (error) {
-      console.error("Error fetching MQL/SQL data:", error);
-    }
-  };
-
   const handleSync = async () => {
     setSyncing(true);
     try {
