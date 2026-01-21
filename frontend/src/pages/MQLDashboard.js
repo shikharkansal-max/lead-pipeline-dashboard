@@ -206,6 +206,28 @@ const MQLDashboard = () => {
           </Card>
         </div>
 
+        {/* Target Gauges */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <TargetGauge
+            current={(leadFunnelData?.mql_india || 0) + (leadFunnelData?.mql_us || 0)}
+            target={150}
+            label="MQL Target"
+            unit=""
+          />
+          <TargetGauge
+            current={(leadFunnelData?.sql_india || 0) + (leadFunnelData?.sql_us || 0)}
+            target={50}
+            label="SQL Target"
+            unit=""
+          />
+          <TargetGauge
+            current={(leadFunnelData?.deals_india || 0) + (leadFunnelData?.deals_us || 0)}
+            target={30}
+            label="Deal Target"
+            unit=""
+          />
+        </div>
+
         {/* Lead Funnel */}
         {leadFunnelData && (
           <div className="mb-8">
