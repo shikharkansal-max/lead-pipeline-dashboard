@@ -327,6 +327,9 @@ async def sync_sheets():
         deal_docs = [{**deal, 'created_at': deal['created_at']} for deal in deals]
         await db.deals.insert_many(deal_docs)
         
+        # Also sync MQL/SQL data from the second sheet
+        await sync_mql_sql_data(values)
+        
         # Update sync metadata
         sync_meta = {
             'id': str(uuid.uuid4()),
