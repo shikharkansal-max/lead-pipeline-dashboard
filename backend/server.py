@@ -357,8 +357,12 @@ async def sync_sheets():
         deal_docs = [{**deal, 'created_at': deal['created_at']} for deal in deals]
         await db.deals.insert_many(deal_docs)
         
-        # Also sync MQL/SQL data from the second sheet
-        await sync_mql_sql_data(values)
+        # Fetch and sync MQL/SQL data from the second sheet
+        sheet_2_values = await fetch_sheet_2_data()
+        if sheet_2_values:
+            await sync_mql_sql_data(sheet_2_values)
+        else:
+            logger.warning("Could not fetch MQL/SQL data from second sheet")
         
         # Update sync metadata
         sync_meta = {
