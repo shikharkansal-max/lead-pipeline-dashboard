@@ -203,8 +203,108 @@ def parse_sheet_data(values: List[List[str]]) -> List[Dict]:
             deal_data['created_at'] = datetime.now(timezone.utc).isoformat()
             deals.append(deal_data)
             
-    logger.info(f"Parsed {len(deals)} deals from sheet")
-    return deals
+def parse_mql_sql_data(values: List[List[str]]) -> Dict[str, Any]:
+    """Parse MQL and SQL data from the sheet"""
+    mql_sql_data = {
+        'mql_us': {'channels': {}, 'dates': [], 'totals': []},
+        'mql_india': {'channels': {}, 'dates': [], 'totals': []},
+        'sql_us': {'channels': {}, 'dates': [], 'totals': []},
+        'sql_india': {'channels': {}, 'dates': [], 'totals': []},
+        'mql_total': {'channels': {}, 'dates': [], 'totals': []},
+        'sql_total': {'channels': {}, 'dates': [], 'totals': []}
+    }
+    
+    current_section = None
+    date_row = None
+    
+    for i, row in enumerate(values):
+        if not row or len(row) == 0:
+            continue
+        
+        # Detect section headers
+        first_cell = str(row[0]).strip() if row[0] else ""
+        
+        # Check for MQL/SQL section markers
+        if len(row) > 5 and isinstance(row[5], str):
+            cell_5 = str(row[5]).strip()
+            if 'MQL - US' in cell_5:
+                current_section = 'mql_us'
+                continue
+            elif 'MQL - India' in cell_5:
+                current_section = 'mql_india'
+                continue
+            elif 'SQL - US' in cell_5:
+                current_section = 'sql_us'
+                continue
+            elif 'SQL - India' in cell_5:
+                current_section = 'sql_india'
+                continue
+            elif cell_5 == 'MQL':
+                current_section = 'mql_total'
+                continue
+            elif cell_5 == 'SQL':
+                current_section = 'sql_total'
+                continue
+        
+        # If we're in a section and this is the header row (has "Acquistion Channel")
+        if current_section and first_cell == 'Acquistion Channel':
+            # Extract date columns
+            dates = []
+            for j in range(2, min(8, len(row))):  # Columns C through H (8 Dec to 12 Jan)
+                if row[j]:
+                    dates.append(str(row[j]).strip())
+            mql_sql_data[current_section]['dates'] = dates
+            date_row = i
+            continue
+        
+        # If we're in a section and have passed the header, parse data rows
+        if current_section and date_row and i > date_row:
+            channel = first_cell
+            if channel and channel != 'Total' and not channel.startswith('#'):
+                values_list = []
+                for j in range(2, min(8, len(row))):
+                    try:
+                        val = int(row[j]) if row[j] and str(row[j]).strip() else 0
+                        values_list.append(val)
+                    except:
+                        values_list.append(0)
+                
+                if values_list and sum(values_list) > 0:  # Only add if has data
+                    mql_sql_data[current_section]['channels'][channel] = values_list
+            
+            # Capture total row
+            if channel == 'Total':
+                values_list = []
+                for j in range(2, min(8, len(row))):
+                    try:
+                        val = int(row[j]) if row[j] and str(row[j]).strip() else 0
+                        values_list.append(val)
+                    except:
+                        values_list.append(0)
+                mql_sql_data[current_section]['totals'] = values_list
+                current_section = None  # End of this section
+    
+    return mql_sql_data
+
+async def sync_mql_sql_data(values: List[List[str]]):
+    """Sync MQL/SQL data to database"""
+    try:
+        mql_sql_data = parse_mql_sql_data(values)
+        
+        # Store in database
+        await db.mql_sql_metrics.delete_many({})
+        
+        doc = {
+            'id': str(uuid.uuid4()),
+            'data': mql_sql_data,
+            'last_updated': datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.mql_sql_metrics.insert_one(doc)
+        logger.info("MQL/SQL data synced successfully")
+        
+    except Exception as e:
+        logger.error(f"Error syncing MQL/SQL data: {e}")
 
 @api_router.post("/sheets/sync")
 async def sync_sheets():
