@@ -203,6 +203,9 @@ def parse_sheet_data(values: List[List[str]]) -> List[Dict]:
             deal_data['created_at'] = datetime.now(timezone.utc).isoformat()
             deals.append(deal_data)
             
+    logger.info(f"Parsed {len(deals)} deals from sheet")
+    return deals
+            
 def parse_mql_sql_data(values: List[List[str]]) -> Dict[str, Any]:
     """Parse MQL and SQL data from the sheet"""
     mql_sql_data = {
