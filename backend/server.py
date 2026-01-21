@@ -130,11 +130,37 @@ async def fetch_sheet_data():
                 csv_reader = csv.reader(io.StringIO(content))
                 values = list(csv_reader)
                 
-                logger.info(f"Fetched {len(values)} rows from sheet")
+                logger.info(f"Fetched {len(values)} rows from main sheet")
                 return values
                 
     except Exception as e:
         logger.error(f"Error fetching sheet data: {e}")
+        return None
+
+async def fetch_sheet_2_data():
+    """Fetch data from Google Sheets second tab (MQL/SQL data)"""
+    import aiohttp
+    import csv
+    import io
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(SHEET_2_CSV_URL, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to fetch sheet 2: HTTP {response.status}")
+                    return None
+                
+                content = await response.text()
+                
+                # Parse CSV
+                csv_reader = csv.reader(io.StringIO(content))
+                values = list(csv_reader)
+                
+                logger.info(f"Fetched {len(values)} rows from MQL/SQL sheet")
+                return values
+                
+    except Exception as e:
+        logger.error(f"Error fetching sheet 2 data: {e}")
         return None
 
 def parse_sheet_data(values: List[List[str]]) -> List[Dict]:
