@@ -572,6 +572,87 @@ async def get_sync_status():
         logger.error(f"Error fetching sync status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/analytics/mql-sql")
+async def get_mql_sql_metrics():
+    """Get MQL and SQL metrics"""
+    try:
+        data = await db.mql_sql_metrics.find_one({}, {'_id': 0})
+        
+        if not data:
+            return {
+                'mql_us': {},
+                'mql_india': {},
+                'sql_us': {},
+                'sql_india': {},
+                'mql_total': {},
+                'sql_total': {}
+            }
+        
+        return data.get('data', {})
+        
+    except Exception as e:
+        logger.error(f"Error fetching MQL/SQL metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/analytics/lead-funnel")
+async def get_lead_funnel():
+    """Get lead funnel conversion metrics"""
+    try:
+        # Get MQL/SQL data
+        mql_sql_doc = await db.mql_sql_metrics.find_one({}, {'_id': 0})
+        
+        if not mql_sql_doc:
+            return {
+                'mql_india': 0,
+                'sql_india': 0,
+                'deals_india': 0,
+                'mql_us': 0,
+                'sql_us': 0,
+                'deals_us': 0,
+                'conversion_mql_to_sql_india': 0,
+                'conversion_sql_to_deal_india': 0,
+                'conversion_mql_to_sql_us': 0,
+                'conversion_sql_to_deal_us': 0
+            }
+        
+        mql_sql_data = mql_sql_doc.get('data', {})
+        
+        # Calculate totals for each region
+        mql_india_total = sum(mql_sql_data.get('mql_india', {}).get('totals', []))
+        sql_india_total = sum(mql_sql_data.get('sql_india', {}).get('totals', []))
+        mql_us_total = sum(mql_sql_data.get('mql_us', {}).get('totals', []))
+        sql_us_total = sum(mql_sql_data.get('sql_us', {}).get('totals', []))
+        
+        # Get deal counts by region
+        deals = await db.deals.find({}, {'_id': 0}).to_list(10000)
+        deals_india = len([d for d in deals if d.get('region', '').lower() == 'india'])
+        deals_us = len([d for d in deals if d.get('region', '').lower() == 'us'])
+        
+        # Calculate conversion rates
+        conv_mql_sql_india = (sql_india_total / mql_india_total * 100) if mql_india_total > 0 else 0
+        conv_sql_deal_india = (deals_india / sql_india_total * 100) if sql_india_total > 0 else 0
+        conv_mql_sql_us = (sql_us_total / mql_us_total * 100) if mql_us_total > 0 else 0
+        conv_sql_deal_us = (deals_us / sql_us_total * 100) if sql_us_total > 0 else 0
+        
+        return {
+            'mql_india': mql_india_total,
+            'sql_india': sql_india_total,
+            'deals_india': deals_india,
+            'mql_us': mql_us_total,
+            'sql_us': sql_us_total,
+            'deals_us': deals_us,
+            'conversion_mql_to_sql_india': round(conv_mql_sql_india, 1),
+            'conversion_sql_to_deal_india': round(conv_sql_deal_india, 1),
+            'conversion_mql_to_sql_us': round(conv_mql_sql_us, 1),
+            'conversion_sql_to_deal_us': round(conv_sql_deal_us, 1),
+            'overall_conversion_india': round((deals_india / mql_india_total * 100) if mql_india_total > 0 else 0, 1),
+            'overall_conversion_us': round((deals_us / mql_us_total * 100) if mql_us_total > 0 else 0, 1)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating lead funnel: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/")
 async def root():
     return {"message": "Lead Pipeline Dashboard API"}
