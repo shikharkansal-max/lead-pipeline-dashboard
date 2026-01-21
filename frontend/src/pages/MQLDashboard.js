@@ -6,6 +6,7 @@ import { RefreshCw, Calendar, TrendingUp, Users, Target } from "lucide-react";
 import { toast } from "sonner";
 import LeadFunnel from "../components/LeadFunnel";
 import MQLSQLTable from "../components/MQLSQLTable";
+import TargetGauge from "../components/TargetGauge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
