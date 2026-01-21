@@ -109,6 +109,7 @@ class LeadFunnelMetrics(BaseModel):
 # Google Sheets Configuration - Using CSV export from publicly shared sheet
 SPREADSHEET_ID = "1sCF9c4A0rartzBdJMo8bYQbKkAyHqcJsIZOlANDcbn4"
 SHEET_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv"
+SHEET_2_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid=608527908"
 
 async def fetch_sheet_data():
     """Fetch data from Google Sheets published CSV"""
