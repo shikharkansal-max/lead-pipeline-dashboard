@@ -24,6 +24,8 @@ const Dashboard = () => {
   const [aePerformance, setAePerformance] = useState([]);
   const [regionalMetrics, setRegionalMetrics] = useState([]);
   const [deals, setDeals] = useState([]);
+  const [leadFunnelData, setLeadFunnelData] = useState(null);
+  const [mqlSqlData, setMqlSqlData] = useState(null);
   const [filters, setFilters] = useState({
     ae: null,
     region: null,
