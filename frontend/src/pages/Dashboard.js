@@ -54,9 +54,7 @@ const Dashboard = () => {
         fetchAEPerformance(),
         fetchRegionalMetrics(),
         fetchDeals(),
-        fetchFilterOptions(),
-        fetchLeadFunnel(),
-        fetchMQLSQL()
+        fetchFilterOptions()
       ]);
     } catch (error) {
       console.error("Error fetching data:", error);
