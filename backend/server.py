@@ -126,37 +126,41 @@ def parse_sheet_data(values: List[List[str]]) -> List[Dict]:
     headers = values[0]
     deals = []
     
-    # Map headers to expected fields
+    # Map headers to expected fields - matching actual Google Sheet columns
     header_map = {
-        'Deal Name': 'deal_name',
-        'Deal Stage': 'stage',
+        'Stage': 'stage',
+        'Deal': 'deal_name',
         'AE': 'ae',
-        'Geography': 'region',
-        'Geography (New)': 'region',
+        'Geo': 'region',
         'Industry': 'industry',
         'Amount': 'amount',
         'Potential Deal Size': 'potential_size',
         'Confidence': 'confidence',
         'Date': 'date',
-        'Close Date': 'close_date',
-        'Lead Source (New)': 'lead_source'
+        'Project Status': 'project_status'
     }
+    
+    logger.info(f"Sheet headers: {headers}")
     
     for row in values[1:]:
         if not row or len(row) == 0:
+            continue
+        
+        # Skip rows that don't have a deal name or stage
+        if len(row) < 2 or not row[0] or not row[1]:
             continue
             
         deal_data = {}
         for i, header in enumerate(headers):
             if i < len(row) and header in header_map:
                 field = header_map[header]
-                value = row[i].strip() if row[i] else ""
+                value = row[i].strip() if isinstance(row[i], str) and row[i] else ""
                 
                 # Parse numeric fields
                 if field in ['amount', 'potential_size']:
                     try:
-                        # Remove currency symbols and commas
-                        cleaned = value.replace('$', '').replace(',', '').replace('₹', '')
+                        # Remove currency symbols, commas, and other formatting
+                        cleaned = str(value).replace('$', '').replace(',', '').replace('₹', '').replace('"', '')
                         deal_data[field] = float(cleaned) if cleaned else 0.0
                     except:
                         deal_data[field] = 0.0
@@ -164,11 +168,24 @@ def parse_sheet_data(values: List[List[str]]) -> List[Dict]:
                     deal_data[field] = value
         
         # Only add if required fields exist
-        if deal_data.get('deal_name') and deal_data.get('ae'):
+        if deal_data.get('deal_name') and deal_data.get('stage'):
+            # Set defaults for missing fields
+            if not deal_data.get('ae'):
+                deal_data['ae'] = 'Unknown'
+            if not deal_data.get('region'):
+                deal_data['region'] = 'Unknown'
+            if not deal_data.get('industry'):
+                deal_data['industry'] = 'Unknown'
+            if not deal_data.get('confidence'):
+                deal_data['confidence'] = 'Medium'
+            if not deal_data.get('date'):
+                deal_data['date'] = datetime.now().strftime('%Y-%m-%d')
+                
             deal_data['id'] = str(uuid.uuid4())
             deal_data['created_at'] = datetime.now(timezone.utc).isoformat()
             deals.append(deal_data)
-    
+            
+    logger.info(f"Parsed {len(deals)} deals from sheet")
     return deals
 
 @api_router.post("/sheets/sync")
