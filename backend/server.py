@@ -724,6 +724,61 @@ async def get_lead_funnel():
         logger.error(f"Error calculating lead funnel: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/trends/ai-news")
+async def get_ai_trends():
+    """Get AI industry trends and news"""
+    try:
+        # In a production environment, integrate with a news API
+        # For now, returning curated mock data relevant to AI and Nurix.ai
+        trends = [
+            {
+                "title": "OpenAI Announces GPT-5 with Enhanced Reasoning Capabilities",
+                "description": "OpenAI unveils GPT-5, featuring breakthrough improvements in logical reasoning and multi-step problem solving.",
+                "url": "https://openai.com/research",
+                "publishedAt": datetime.now(timezone.utc).isoformat(),
+                "source": "TechCrunch",
+                "category": "AI Models"
+            },
+            {
+                "title": "AI Agents Transform Enterprise Workflows: $50B Market by 2026",
+                "description": "Market research shows AI agent adoption accelerating across industries, with autonomous agents handling complex business processes.",
+                "url": "https://www.gartner.com",
+                "publishedAt": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+                "source": "Forbes",
+                "category": "Market Trends"
+            },
+            {
+                "title": "Enterprise AI Adoption Reaches 68% Among Fortune 500 Companies",
+                "description": "Latest survey reveals rapid AI integration across large enterprises, with focus on productivity and automation tools.",
+                "url": "https://www.mckinsey.com",
+                "publishedAt": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+                "source": "McKinsey",
+                "category": "Enterprise AI"
+            },
+            {
+                "title": "AI-Powered Sales Platforms See 150% Growth in Q4 2024",
+                "description": "Sales automation and AI-driven customer engagement platforms experience unprecedented growth, driven by demand for efficiency.",
+                "url": "https://venturebeat.com",
+                "publishedAt": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+                "source": "VentureBeat",
+                "category": "Funding"
+            },
+            {
+                "title": "Google's Gemini Ultra Achieves Human-Level Performance on Complex Tasks",
+                "description": "Google's latest AI model demonstrates unprecedented accuracy in scientific reasoning and creative tasks.",
+                "url": "https://deepmind.google",
+                "publishedAt": (datetime.now(timezone.utc) - timedelta(days=4)).isoformat(),
+                "source": "The Verge",
+                "category": "AI Models"
+            }
+        ]
+        
+        return {"articles": trends, "count": len(trends)}
+        
+    except Exception as e:
+        logger.error(f"Error fetching AI trends: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/")
 async def root():
     return {"message": "Lead Pipeline Dashboard API"}
