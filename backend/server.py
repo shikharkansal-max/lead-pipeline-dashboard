@@ -239,80 +239,117 @@ def parse_mql_sql_data(values: List[List[str]]) -> Dict[str, Any]:
         'mql_us': {'channels': {}, 'dates': [], 'totals': []},
         'mql_india': {'channels': {}, 'dates': [], 'totals': []},
         'sql_us': {'channels': {}, 'dates': [], 'totals': []},
-        'sql_india': {'channels': {}, 'dates': [], 'totals': []},
-        'mql_total': {'channels': {}, 'dates': [], 'totals': []},
-        'sql_total': {'channels': {}, 'dates': [], 'totals': []}
+        'sql_india': {'channels': {}, 'dates': [], 'totals': []}
     }
     
     current_section = None
-    date_row = None
+    header_row_index = None
     
     for i, row in enumerate(values):
         if not row or len(row) == 0:
             continue
         
-        # Detect section headers
-        first_cell = str(row[0]).strip() if row[0] else ""
-        
-        # Check for MQL/SQL section markers
-        if len(row) > 5 and isinstance(row[5], str):
-            cell_5 = str(row[5]).strip()
-            if 'MQL - US' in cell_5:
-                current_section = 'mql_us'
-                continue
-            elif 'MQL - India' in cell_5:
-                current_section = 'mql_india'
-                continue
-            elif 'SQL - US' in cell_5:
-                current_section = 'sql_us'
-                continue
-            elif 'SQL - India' in cell_5:
-                current_section = 'sql_india'
-                continue
-            elif cell_5 == 'MQL':
-                current_section = 'mql_total'
-                continue
-            elif cell_5 == 'SQL':
-                current_section = 'sql_total'
-                continue
-        
-        # If we're in a section and this is the header row (has "Acquistion Channel")
-        if current_section and first_cell == 'Acquistion Channel':
-            # Extract date columns
-            dates = []
-            for j in range(2, min(8, len(row))):  # Columns C through H (8 Dec to 12 Jan)
-                if row[j]:
-                    dates.append(str(row[j]).strip())
-            mql_sql_data[current_section]['dates'] = dates
-            date_row = i
-            continue
-        
-        # If we're in a section and have passed the header, parse data rows
-        if current_section and date_row and i > date_row:
-            channel = first_cell
-            if channel and channel != 'Total' and not channel.startswith('#'):
-                values_list = []
-                for j in range(2, min(8, len(row))):
-                    try:
-                        val = int(row[j]) if row[j] and str(row[j]).strip() else 0
-                        values_list.append(val)
-                    except:
-                        values_list.append(0)
-                
-                if values_list and sum(values_list) > 0:  # Only add if has data
-                    mql_sql_data[current_section]['channels'][channel] = values_list
+        # Check for section markers in column F (index 5)
+        if len(row) > 6:
+            cell_6 = str(row[6]).strip() if row[6] else ""
             
-            # Capture total row
-            if channel == 'Total':
-                values_list = []
-                for j in range(2, min(8, len(row))):
+            # Detect section headers
+            if 'MQL - US' in cell_6:
+                current_section = 'mql_us'
+                header_row_index = None
+                logger.info(f"Found MQL - US section at row {i}")
+                continue
+            elif 'MQL - India' in cell_6:
+                current_section = 'mql_india'
+                header_row_index = None
+                logger.info(f"Found MQL - India section at row {i}")
+                continue
+            elif 'SQL - US' in cell_6:
+                current_section = 'sql_us'
+                header_row_index = None
+                logger.info(f"Found SQL - US section at row {i}")
+                continue
+            elif 'SQL - India' in cell_6:
+                current_section = 'sql_india'
+                header_row_index = None
+                logger.info(f"Found SQL - India section at row {i}")
+                continue
+        
+        # If we're in a section, look for the header row with "Acquistion Channel"
+        if current_section and header_row_index is None:
+            first_cell = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+            if first_cell == 'Acquistion Channel':
+                # Extract dates from columns C-H (indices 2-7)
+                dates = []
+                for j in range(2, 8):
+                    if len(row) > j and row[j]:
+                        date_str = str(row[j]).strip()
+                        if date_str and date_str != 'Weekly Target':
+                            dates.append(date_str)
+                
+                mql_sql_data[current_section]['dates'] = dates
+                header_row_index = i
+                logger.info(f"Found header row for {current_section} at {i}, dates: {dates}")
+                continue
+        
+        # Parse data rows after header
+        if current_section and header_row_index is not None and i > header_row_index:
+            channel_name = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+            
+            # Stop at empty rows or new sections
+            if not channel_name or (len(row) > 6 and row[6] and 'SQL' in str(row[6])):
+                if channel_name == 'Total':
+                    # Parse total row
+                    totals = []
+                    for j in range(2, 8):
+                        if len(row) > j:
+                            try:
+                                val = int(row[j]) if row[j] and str(row[j]).strip() and str(row[j]).strip() not in ['', 'Weekly Target'] else 0
+                                totals.append(val)
+                            except:
+                                totals.append(0)
+                    mql_sql_data[current_section]['totals'] = totals
+                    logger.info(f"Parsed totals for {current_section}: {totals}")
+                
+                # Reset for next section
+                current_section = None
+                header_row_index = None
+                continue
+            
+            # Skip rows with #REF! or empty channel names
+            if not channel_name or channel_name.startswith('#') or channel_name == 'Total':
+                if channel_name == 'Total':
+                    # Parse total row
+                    totals = []
+                    for j in range(2, 8):
+                        if len(row) > j:
+                            try:
+                                val = int(row[j]) if row[j] and str(row[j]).strip() else 0
+                                totals.append(val)
+                            except:
+                                totals.append(0)
+                    mql_sql_data[current_section]['totals'] = totals
+                    logger.info(f"Parsed totals for {current_section}: {totals}")
+                continue
+            
+            # Parse channel data (columns C-H, indices 2-7)
+            channel_values = []
+            for j in range(2, 8):
+                if len(row) > j:
                     try:
                         val = int(row[j]) if row[j] and str(row[j]).strip() else 0
-                        values_list.append(val)
+                        channel_values.append(val)
                     except:
-                        values_list.append(0)
-                mql_sql_data[current_section]['totals'] = values_list
-                current_section = None  # End of this section
+                        channel_values.append(0)
+            
+            # Only add if has some data
+            if channel_values and sum(channel_values) > 0:
+                mql_sql_data[current_section]['channels'][channel_name] = channel_values
+                logger.info(f"Parsed {current_section} - {channel_name}: {channel_values}")
+    
+    logger.info(f"Final MQL/SQL data structure: {list(mql_sql_data.keys())}")
+    for section, data in mql_sql_data.items():
+        logger.info(f"{section}: {len(data['channels'])} channels, {len(data['dates'])} dates, totals: {data['totals']}")
     
     return mql_sql_data
 
