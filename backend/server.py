@@ -13,6 +13,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import asyncio
 from functools import lru_cache
+import hashlib
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -108,34 +109,36 @@ class LeadFunnelMetrics(BaseModel):
 
 # Google Sheets Configuration - Using CSV export from publicly shared sheet
 SPREADSHEET_ID = "1sCF9c4A0rartzBdJMo8bYQbKkAyHqcJsIZOlANDcbn4"
-SHEET_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv"
+# Raw Data tab (gid=697754726) - HubSpot export with deal data
+RAW_DATA_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid=697754726"
+# MQL/SQL data tab (gid=608527908)
 SHEET_2_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid=608527908"
 
-async def fetch_sheet_data():
-    """Fetch data from Google Sheets published CSV"""
+async def fetch_raw_data():
+    """Fetch data from Raw Data tab (HubSpot export)"""
     import aiohttp
     import csv
     import io
-    
+
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(SHEET_CSV_URL, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.get(RAW_DATA_CSV_URL, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status != 200:
-                    logger.error(f"Failed to fetch sheet: HTTP {response.status}")
+                    logger.error(f"Failed to fetch raw data sheet: HTTP {response.status}")
                     return None
-                
+
                 content = await response.text()
-                
+
                 # Parse CSV
                 csv_reader = csv.reader(io.StringIO(content))
                 values = list(csv_reader)
-                
-                logger.info(f"Fetched {len(values)} rows from main sheet")
-                return values
-                
+
+                logger.info(f"Fetched {len(values)} rows from Raw Data tab")
+                return values, content
+
     except Exception as e:
-        logger.error(f"Error fetching sheet data: {e}")
-        return None
+        logger.error(f"Error fetching raw data: {e}")
+        return None, None
 
 async def fetch_sheet_2_data():
     """Fetch data from Google Sheets second tab (MQL/SQL data)"""
@@ -163,74 +166,86 @@ async def fetch_sheet_2_data():
         logger.error(f"Error fetching sheet 2 data: {e}")
         return None
 
-def parse_sheet_data(values: List[List[str]]) -> List[Dict]:
-    """Parse sheet data into deal objects"""
+def parse_raw_data(values: List[List[str]]) -> List[Dict]:
+    """Parse Raw Data tab (HubSpot export) into deal objects"""
     if not values or len(values) < 2:
         return []
-    
+
     headers = values[0]
     deals = []
-    
-    # Map headers to expected fields - matching actual Google Sheet columns
-    header_map = {
-        'Stage': 'stage',
-        'Deal': 'deal_name',
-        'AE': 'ae',
-        'Geo': 'region',
+
+    # Build header index map for efficient lookup
+    header_idx = {h.strip(): i for i, h in enumerate(headers)}
+
+    # Column mapping from HubSpot export to internal fields
+    # Using column names from the Raw Data tab
+    column_map = {
+        'dealname': 'deal_name',
+        'dealstage_name': 'stage',
+        'Deal owner': 'ae',
+        'geography': 'region',
         'Industry': 'industry',
         'Amount': 'amount',
-        'Potential Deal Size': 'potential_size',
         'Confidence': 'confidence',
-        'Date': 'date',
-        'Project Status': 'project_status'
+        'Create Date': 'date',
+        'Close Date': 'close_date',
+        'Acquisition Channel': 'lead_source',
     }
-    
-    logger.info(f"Sheet headers: {headers}")
-    
-    for row in values[1:]:
+
+    logger.info(f"Raw Data tab has {len(headers)} columns, {len(values)-1} data rows")
+
+    for row_num, row in enumerate(values[1:], start=2):
         if not row or len(row) == 0:
             continue
-        
-        # Skip rows that don't have a deal name or stage
-        if len(row) < 2 or not row[0] or not row[1]:
-            continue
-            
+
         deal_data = {}
-        for i, header in enumerate(headers):
-            if i < len(row) and header in header_map:
-                field = header_map[header]
-                value = row[i].strip() if isinstance(row[i], str) and row[i] else ""
-                
+
+        # Extract fields using column mapping
+        for col_name, field_name in column_map.items():
+            idx = header_idx.get(col_name)
+            if idx is not None and idx < len(row):
+                value = row[idx].strip() if isinstance(row[idx], str) and row[idx] else ""
+
                 # Parse numeric fields
-                if field in ['amount', 'potential_size']:
+                if field_name in ['amount', 'potential_size']:
                     try:
-                        # Remove currency symbols, commas, and other formatting
-                        cleaned = str(value).replace('$', '').replace(',', '').replace('₹', '').replace('"', '')
-                        deal_data[field] = float(cleaned) if cleaned else 0.0
+                        cleaned = str(value).replace('$', '').replace(',', '').replace('₹', '').replace('"', '').strip()
+                        deal_data[field_name] = float(cleaned) if cleaned else 0.0
                     except:
-                        deal_data[field] = 0.0
+                        deal_data[field_name] = 0.0
                 else:
-                    deal_data[field] = value
-        
-        # Only add if required fields exist
-        if deal_data.get('deal_name') and deal_data.get('stage'):
-            # Set defaults for missing fields
-            if not deal_data.get('ae'):
-                deal_data['ae'] = 'Unknown'
-            if not deal_data.get('region'):
-                deal_data['region'] = 'Unknown'
-            if not deal_data.get('industry'):
-                deal_data['industry'] = 'Unknown'
-            if not deal_data.get('confidence'):
-                deal_data['confidence'] = 'Medium'
-            if not deal_data.get('date'):
-                deal_data['date'] = datetime.now().strftime('%Y-%m-%d')
-                
-            deal_data['id'] = str(uuid.uuid4())
-            deal_data['created_at'] = datetime.now(timezone.utc).isoformat()
-            deals.append(deal_data)
-            
-    logger.info(f"Parsed {len(deals)} deals from sheet")
+                    deal_data[field_name] = value
+
+        # Use amount as potential_size if not separately available
+        if 'potential_size' not in deal_data or deal_data.get('potential_size', 0) == 0:
+            deal_data['potential_size'] = deal_data.get('amount', 0.0)
+
+        # Skip rows without deal name or stage
+        if not deal_data.get('deal_name') or not deal_data.get('stage'):
+            continue
+
+        # Skip rejected/archived deals if needed (optional - keeping all for now)
+        stage = deal_data.get('stage', '').lower()
+        if stage == 'reject':
+            continue  # Skip rejected deals
+
+        # Set defaults for missing fields
+        if not deal_data.get('ae'):
+            deal_data['ae'] = 'Unknown'
+        if not deal_data.get('region'):
+            deal_data['region'] = 'Unknown'
+        if not deal_data.get('industry'):
+            deal_data['industry'] = 'Unknown'
+        if not deal_data.get('confidence'):
+            deal_data['confidence'] = 'Medium'
+        if not deal_data.get('date'):
+            deal_data['date'] = datetime.now().strftime('%Y-%m-%d')
+
+        deal_data['id'] = str(uuid.uuid4())
+        deal_data['created_at'] = datetime.now(timezone.utc).isoformat()
+        deals.append(deal_data)
+
+    logger.info(f"Parsed {len(deals)} deals from Raw Data tab")
     return deals
             
 def parse_mql_sql_data(values: List[List[str]]) -> Dict[str, Any]:
@@ -373,57 +388,68 @@ async def sync_mql_sql_data(values: List[List[str]]):
     except Exception as e:
         logger.error(f"Error syncing MQL/SQL data: {e}")
 
+def compute_content_hash(content: str) -> str:
+    """Compute MD5 hash of content for change detection"""
+    return hashlib.md5(content.encode('utf-8')).hexdigest()
+
+
 @api_router.post("/sheets/sync")
 async def sync_sheets():
     """Sync data from Google Sheets to MongoDB"""
     try:
-        values = await fetch_sheet_data()
-        
-        if not values:
-            raise HTTPException(status_code=500, detail="Failed to fetch sheet data. Please ensure the Google Sheet is publicly accessible or provide proper credentials.")
-        
-        deals = parse_sheet_data(values)
-        
+        result = await fetch_raw_data()
+        if result[0] is None:
+            raise HTTPException(status_code=500, detail="Failed to fetch sheet data. Please ensure the Google Sheet is publicly accessible.")
+
+        values, raw_content = result
+
+        deals = parse_raw_data(values)
+
         if not deals:
             raise HTTPException(status_code=400, detail="No valid deal data found in the sheet")
-        
+
+        # Compute content hash for change detection
+        content_hash = compute_content_hash(raw_content)
+
         # Clear existing deals and insert new ones
         await db.deals.delete_many({})
-        
+
         # Convert deals to documents
         deal_docs = [{**deal, 'created_at': deal['created_at']} for deal in deals]
         await db.deals.insert_many(deal_docs)
-        
+
         # Fetch and sync MQL/SQL data from the second sheet
         sheet_2_values = await fetch_sheet_2_data()
         if sheet_2_values:
             await sync_mql_sql_data(sheet_2_values)
         else:
             logger.warning("Could not fetch MQL/SQL data from second sheet")
-        
-        # Update sync metadata
+
+        # Update sync metadata with content hash
         sync_meta = {
             'id': str(uuid.uuid4()),
             'last_sync': datetime.now(timezone.utc).isoformat(),
             'status': 'success',
             'records_synced': len(deals),
+            'content_hash': content_hash,
             'error': None
         }
-        
+
         await db.sync_metadata.delete_many({})
         await db.sync_metadata.insert_one(sync_meta)
-        
+
         return {
             'status': 'success',
             'records_synced': len(deals),
-            'last_sync': sync_meta['last_sync']
+            'last_sync': sync_meta['last_sync'],
+            'content_hash': content_hash
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Sync error: {e}")
-        
+
         # Log error in metadata
         sync_meta = {
             'id': str(uuid.uuid4()),
@@ -434,8 +460,83 @@ async def sync_sheets():
         }
         await db.sync_metadata.delete_many({})
         await db.sync_metadata.insert_one(sync_meta)
-        
+
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@api_router.get("/sheets/check-changes")
+async def check_sheet_changes():
+    """Check if sheet data has changed since last sync"""
+    import aiohttp
+
+    try:
+        # Get stored hash
+        sync_meta = await db.sync_metadata.find_one({}, {'_id': 0})
+        stored_hash = sync_meta.get('content_hash') if sync_meta else None
+
+        # Fetch current sheet content
+        async with aiohttp.ClientSession() as session:
+            async with session.get(RAW_DATA_CSV_URL, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    return {'has_changes': False, 'error': 'Failed to fetch sheet'}
+
+                content = await response.text()
+                current_hash = compute_content_hash(content)
+
+        has_changes = stored_hash is None or stored_hash != current_hash
+
+        return {
+            'has_changes': has_changes,
+            'current_hash': current_hash,
+            'stored_hash': stored_hash
+        }
+
+    except Exception as e:
+        logger.error(f"Error checking sheet changes: {e}")
+        return {'has_changes': False, 'error': str(e)}
+
+
+@api_router.post("/sheets/auto-sync")
+async def auto_sync_if_changed():
+    """Automatically sync if sheet data has changed"""
+    try:
+        # Check for changes first
+        change_check = await check_sheet_changes()
+
+        if change_check.get('error'):
+            return {
+                'synced': False,
+                'reason': 'error_checking_changes',
+                'error': change_check['error']
+            }
+
+        if not change_check.get('has_changes'):
+            # No changes, return current status
+            sync_meta = await db.sync_metadata.find_one({}, {'_id': 0})
+            return {
+                'synced': False,
+                'reason': 'no_changes',
+                'last_sync': sync_meta.get('last_sync') if sync_meta else None,
+                'records_count': sync_meta.get('records_synced', 0) if sync_meta else 0
+            }
+
+        # Changes detected, perform sync
+        sync_result = await sync_sheets()
+
+        return {
+            'synced': True,
+            'reason': 'changes_detected',
+            'records_synced': sync_result['records_synced'],
+            'last_sync': sync_result['last_sync']
+        }
+
+    except Exception as e:
+        logger.error(f"Auto-sync error: {e}")
+        return {
+            'synced': False,
+            'reason': 'sync_error',
+            'error': str(e)
+        }
 
 @api_router.get("/deals")
 async def get_deals(

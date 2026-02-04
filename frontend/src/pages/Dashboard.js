@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, Users, MapPin } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, Users, MapPin, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import PipelineView from "../components/PipelineView";
 import AEPerformance from "../components/AEPerformance";
 import RegionalBreakdown from "../components/RegionalBreakdown";
 import DealTable from "../components/DealTable";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -22,6 +23,7 @@ const Dashboard = () => {
   const [aePerformance, setAePerformance] = useState([]);
   const [regionalMetrics, setRegionalMetrics] = useState([]);
   const [deals, setDeals] = useState([]);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [filters, setFilters] = useState({
     ae: null,
     region: null,
@@ -34,6 +36,21 @@ const Dashboard = () => {
     stages: [],
     industries: []
   });
+
+  // Callback when data changes via auto-refresh
+  const handleDataChanged = useCallback((syncResult) => {
+    if (syncResult.synced) {
+      toast.success(`Auto-synced ${syncResult.records_synced} records`);
+      fetchData();
+    }
+  }, []);
+
+  // Auto-refresh hook - polls every 30 seconds
+  const { isChecking, lastSync: autoLastSync, lastCheck, error: autoError } = useAutoRefresh(
+    handleDataChanged,
+    30000,
+    autoRefreshEnabled
+  );
 
   useEffect(() => {
     fetchData();
@@ -192,18 +209,41 @@ const Dashboard = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900" data-testid="dashboard-title">Deal Pipeline Dashboard</h1>
               <p className="mt-1 text-sm text-gray-500">
-                Last synced: {formatDate(syncStatus?.last_sync)}
+                Last synced: {formatDate(autoLastSync || syncStatus?.last_sync)}
+                {isChecking && <span className="ml-2 text-blue-500">(checking...)</span>}
               </p>
             </div>
-            <Button 
-              onClick={handleSync} 
-              disabled={syncing}
-              className="bg-blue-600 hover:bg-blue-700"
-              data-testid="sync-button"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing...' : 'Sync Data'}
-            </Button>
+            <div className="flex items-center gap-4">
+              {/* Auto-refresh toggle */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                className={autoRefreshEnabled ? 'text-green-600 border-green-600' : 'text-gray-400'}
+                data-testid="auto-refresh-toggle"
+              >
+                {autoRefreshEnabled ? (
+                  <>
+                    <Wifi className="h-4 w-4 mr-2" />
+                    Auto-sync On
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-4 w-4 mr-2" />
+                    Auto-sync Off
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleSync}
+                disabled={syncing}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="sync-button"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync Data'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

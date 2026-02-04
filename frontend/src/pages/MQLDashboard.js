@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, Calendar, TrendingUp, Users, Target } from "lucide-react";
+import { RefreshCw, Calendar, TrendingUp, Users, Target, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import LeadFunnel from "../components/LeadFunnel";
 import MQLSQLTable from "../components/MQLSQLTable";
 import TargetGauge from "../components/TargetGauge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -19,6 +20,22 @@ const MQLDashboard = () => {
   const [leadFunnelData, setLeadFunnelData] = useState(null);
   const [mqlSqlData, setMqlSqlData] = useState(null);
   const [dateRange, setDateRange] = useState('all');
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+
+  // Callback when data changes via auto-refresh
+  const handleDataChanged = useCallback((syncResult) => {
+    if (syncResult.synced) {
+      toast.success(`Auto-synced ${syncResult.records_synced} records`);
+      fetchData();
+    }
+  }, []);
+
+  // Auto-refresh hook - polls every 30 seconds
+  const { isChecking, lastSync: autoLastSync } = useAutoRefresh(
+    handleDataChanged,
+    30000,
+    autoRefreshEnabled
+  );
 
   useEffect(() => {
     fetchData();
@@ -119,7 +136,8 @@ const MQLDashboard = () => {
                 MQL & SQL Analytics
               </h1>
               <p className="mt-1 text-sm text-gray-500">
-                Last synced: {formatDate(syncStatus?.last_sync)}
+                Last synced: {formatDate(autoLastSync || syncStatus?.last_sync)}
+                {isChecking && <span className="ml-2 text-blue-500">(checking...)</span>}
               </p>
             </div>
             <div className="flex gap-3">
@@ -137,8 +155,28 @@ const MQLDashboard = () => {
                   <SelectItem value="this-quarter">This Quarter</SelectItem>
                 </SelectContent>
               </Select>
-              <Button 
-                onClick={handleSync} 
+              {/* Auto-refresh toggle */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                className={autoRefreshEnabled ? 'text-green-600 border-green-600' : 'text-gray-400'}
+                data-testid="auto-refresh-toggle-mql"
+              >
+                {autoRefreshEnabled ? (
+                  <>
+                    <Wifi className="h-4 w-4 mr-2" />
+                    Auto-sync On
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-4 w-4 mr-2" />
+                    Auto-sync Off
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleSync}
                 disabled={syncing}
                 className="bg-blue-600 hover:bg-blue-700"
                 data-testid="sync-button-mql"
